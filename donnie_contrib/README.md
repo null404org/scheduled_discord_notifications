@@ -1,113 +1,115 @@
 # Discord Event Notification Bot
 
-This Discord bot allows designated users with specific roles to create and manage scheduled events on a Discord server. Notifications are sent to a specified channel, and real-time updates and event cleanup are handled through WebSocket connections for improved efficiency and minimized API usage.
+This bot helps Discord server admins manage and announce events. Authorized users can create events, schedule reminders, and update event images. The bot handles event management tasks like real-time updates, dynamic notification rescheduling, and automatic cleanup of concluded or canceled events.
+
+---
 
 ## Features
 
-- **Event Creation**: Authorized users can create events with details like event name, start time, end time, location, and description.
-- **Automated Notifications**: The bot can send notifications based on user-defined event times, while continuously updating and cleaning up completed or canceled events in real-time.
-- **Role-Based Access Control**: Only users with authorized roles can create events.
-- **Real-Time Updates and Cleanup**: Using WebSocket, the bot responds to real-time event changes and automatically removes concluded or canceled events from the database.
+- **Event Creation**: Authorized users can create events with details such as name, start time, end time, location, and description.
+- **Automated Scheduled Notifications**: Notifications are automatically scheduled to remind members before an event starts, based on customizable intervals.
+- **Dynamic Notification Rescheduling**: If event details change (like start time), notifications are dynamically rescheduled to match the updated times.
+- **Role-Based Access Control**: Only users with specified roles can create events.
+- **Real-Time Updates and Cleanup**: The bot listens for event updates and cancels concluded or canceled events automatically.
 
-## Setup Instructions
+---
+
+## Initial Setup Guide
 
 ### Prerequisites
 
-- Python 3.8 or higher
-- A Discord server with a bot that has the necessary permissions (manage events, send messages, etc.)
+1. **Python 3.8 or Higher**: Make sure Python is installed on your system. [Download Python](https://www.python.org/downloads/).
+2. **Discord Developer Portal**:
+   - Go to [Discord Developer Portal](https://discord.com/developers/applications) and create a new application. Under "Bot" settings, add a bot.
+   - Save the **Bot Token** and invite the bot to your server with these permissions:
+     - **Manage Events**, **Send Messages**, **Embed Links**, **Attach Files**
 
 ### Installation
 
-1. **Clone the Repository**: 
-   ```bash
-   git clone https://github.com/null404org/scheduled_discord_notifications
-   cd scheduled_discord_notifications
-   ```
+1. **Clone the Repository**:
+    ```bash
+    git clone <repository-url>
+    cd <repository-directory>
+    ```
 
 2. **Install Dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-3. **Create a `.env` File**: 
-   Create a `.env` file in the root of your project directory and add the following variables:
+3. **Configure Environment Variables**:
+   - Create a `.env` file in the project directory and add the following variables:
 
-   ```env
-   DISCORD_TOKEN=your-discord-bot-token
-   GUILD_ID=your-discord-guild-id
-   NOTIFICATION_CHANNEL_ID=channel-id-for-notifications
-   BOT_IMAGE_CHANNEL_ID=channel-id-for-image-storage
-   ALLOWED_ROLES=RoleName1=RoleID1,RoleName2=RoleID2
-   ```
+     ```plaintext
+     DISCORD_TOKEN=your-discord-bot-token
+     GUILD_ID=your-discord-guild-id
+     NOTIFICATION_CHANNEL_ID=channel-id-for-notifications
+     BOT_IMAGE_CHANNEL_ID=channel-id-for-image-storage
+     ALLOWED_ROLES=RoleName1=RoleID1,RoleName2=RoleID2
+     ```
+   - **Explanation**:
+     - `DISCORD_TOKEN`: The bot token from the Discord Developer Portal.
+     - `GUILD_ID`: The ID of your Discord server.
+     - `NOTIFICATION_CHANNEL_ID`: The channel ID for event notifications.
+     - `BOT_IMAGE_CHANNEL_ID`: The channel ID for storing event cover images.
+     - `ALLOWED_ROLES`: Comma-separated list of roles allowed to create events in `RoleName=RoleID` format.
 
-   - `DISCORD_TOKEN`: The token for your Discord bot.
-   - `GUILD_ID`: The ID of your Discord server.
-   - `NOTIFICATION_CHANNEL_ID`: The ID of the channel where event notifications should be sent.
-   - `BOT_IMAGE_CHANNEL_ID`: The ID of a channel where uploaded event images will be stored.
-   - `ALLOWED_ROLES`: A comma-separated list of roles permitted to create events. Format: `RoleName=RoleID`.
+---
 
 ### Running the Bot
 
-1. **Run the Bot**:
+1. **Start the Bot**:
+   Run the bot using the following command:
    ```bash
    python Events.py
    ```
 
-2. **Bot Commands**:
-   - **Create Event**: Type `/events` in your Discord server to open the event creation modal (only available to users with allowed roles).
+2. **Using the Bot**:
+   - **Create an Event**: Type `/events` in the Discord server to access the event creation form. Only users with allowed roles can use this command.
+
+---
+
+## Feature Documentation
+
+### Scheduled Notifications
+
+- **Automatic Notification Scheduling**: The bot automatically schedules notifications for upcoming events, using the customizable `NOTIFICATION_TIMES` variable to determine intervals before event start.
+   - **Default Intervals**: Notifications are set at 18 and 6 hours before the event.
+   - To change, modify the `NOTIFICATION_TIMES` variable in the script:
+     ```python
+     NOTIFICATION_TIMES = [18, 6]  # Adjust intervals as desired
+     ```
+
+- **Rescheduling Notifications on Event Changes**: If an event’s start time is updated, the bot will cancel previously scheduled notifications and create new notifications based on the updated time.
+
+### Time Zone Adjustment
+
+Set your local time zone for events by updating the `local_tz` variable:
+   ```python
+   local_tz = timezone('Your/TimeZone')
+   ```
+   Example values:
+   - **North America**: `America/New_York` (ET), `America/Chicago` (CT), `America/Los_Angeles` (PT)
+   - **Europe**: `Europe/London` (GMT/BST), `Europe/Paris` (CET/CEST)
+   - **Asia**: `Asia/Tokyo` (JST), `Asia/Kolkata` (IST)
 
 ### Event Management and Cleanup
 
-- **Real-Time Event Updates**: The bot listens for updates such as event time changes, description edits, and cancellations, and logs them in real time.
-- **Automatic Cleanup**: Events are removed from the bot’s database when canceled or concluded to keep the storage efficient.
+- **Event Creation**: Upon creation, events can include an image upload, details, and are only available to specified roles.
+- **Automatic Cleanup**: Events are removed from the bot’s database once they conclude or are canceled, optimizing storage.
+- **Real-Time Updates**: The bot listens for updates to events, such as changes in time or cancellations, and applies the changes automatically.
 
-### Customizing Notification Times
-You can adjust the notification times by changing the `NOTIFICATION_TIMINGS` variable in the script:
-
-```python
-NOTIFICATION_TIMINGS = [24, 12]  # Time in hours before event start
-```
-
-### Local Time Zone Adjustment
-
-The bot assumes events are created in the `US/Eastern` time zone. If your organization is in a different time zone, update the `local_tz` variable in the script:
-
-```python
-local_tz = timezone('Your/TimeZone')
-```
-
-Examples of time zones:
-
-    North America:
-        'America/New_York' – Eastern Time (ET)
-        'America/Chicago' – Central Time (CT)
-        'America/Denver' – Mountain Time (MT)
-        'America/Los_Angeles' – Pacific Time (PT)
-        'America/Phoenix' – Arizona Time (MT, no DST)
-
-    Europe:
-        'Europe/London' – Greenwich Mean Time (GMT)/British Summer Time (BST)
-        'Europe/Paris' – Central European Time (CET)/Central European Summer Time (CEST)
-
-    Asia:
-        'Asia/Tokyo' – Japan Standard Time (JST)
-        'Asia/Shanghai' – China Standard Time (CST)
-        'Asia/Kolkata' – India Standard Time (IST)
-
-    Australia:
-        'Australia/Sydney' – Australian Eastern Standard Time (AEST)/Australian Eastern Daylight Time (AEDT)
-
-### Notes
-
-- The bot requires continuous uptime for real-time updates and automated cleanup. Consider deploying it on a server or cloud platform.
-- For any missed notifications due to downtime, the bot will automatically resume its tasks upon restarting, with up-to-date data for upcoming events.
+---
 
 ## Troubleshooting
 
-- **Bot Not Responding**: Verify that the bot has the necessary permissions and that your `.env` file has the correct token and IDs.
-- **Missing Event Data**: Ensure that real-time updates and event logs confirm the storage and cleanup of data as intended. 
+- **Bot Not Responding**: Verify that the bot has the correct permissions and check that the `.env` file has accurate information.
+- **Event Updates Not Applying**: Ensure the bot runs continuously for real-time updates. Consider deploying on a server or cloud service for uptime.
+- **Notification Issues**: Confirm that `NOTIFICATION_TIMES` is configured correctly and that any changes to the start time allow enough lead time for the bot to schedule notifications.
+
+---
 
 ## License
 
-This bot is licensed under the MIT License. Feel free to modify and use it in your organization.
+This project is licensed under the MIT License. Feel free to customize and use it for your Discord server’s needs.
 

@@ -28,8 +28,8 @@ This bot helps Discord server admins manage and announce events. Authorized user
 
 1. **Clone the Repository**:
     ```bash
-    git clone <repository-url>
-    cd <repository-directory>
+    git clone https://github.com/null404org/scheduled_discord_notifications
+    cd scheduled_discord_notifications
     ```
 
 2. **Install Dependencies**:

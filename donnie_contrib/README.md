@@ -1,26 +1,27 @@
 # Discord Event Notification Bot
 
-This Discord bot allows users with specific roles to create scheduled events on a Discord server. The bot automatically sends notifications to a designated channel 24 hours and 12 hours before each event starts. The bot is designed to work efficiently, minimizing API usage while ensuring that event reminders are sent in a timely manner.
+This Discord bot allows designated users with specific roles to create and manage scheduled events on a Discord server. Notifications are sent to a specified channel, and real-time updates and event cleanup are handled through WebSocket connections for improved efficiency and minimized API usage.
 
 ## Features
 
-- **Event Creation**: Authorized users can create events directly in the Discord server using a simple command. Events include details such as event name, start time, end time, location, and description.
-- **Automated Notifications**: The bot sends reminder notifications 24 hours and 12 hours before the event's start time to a specified channel.
-- **Role-Based Access Control**: Only users with specific roles can create events, ensuring that only authorized members can use this feature.
+- **Event Creation**: Authorized users can create events with details like event name, start time, end time, location, and description.
+- **Automated Notifications**: The bot can send notifications based on user-defined event times, while continuously updating and cleaning up completed or canceled events in real-time.
+- **Role-Based Access Control**: Only users with authorized roles can create events.
+- **Real-Time Updates and Cleanup**: Using WebSocket, the bot responds to real-time event changes and automatically removes concluded or canceled events from the database.
 
 ## Setup Instructions
 
 ### Prerequisites
 
 - Python 3.8 or higher
-- Discord server with the necessary bot permissions (manage events, send messages, etc.)
+- A Discord server with a bot that has the necessary permissions (manage events, send messages, etc.)
 
 ### Installation
 
 1. **Clone the Repository**: 
    ```bash
-   git clone <repository-url>
-   cd <repository-directory>
+   git clone https://github.com/null404org/scheduled_discord_notifications
+   cd scheduled_discord_notifications
    ```
 
 2. **Install Dependencies**:
@@ -35,54 +36,47 @@ This Discord bot allows users with specific roles to create scheduled events on 
    DISCORD_TOKEN=your-discord-bot-token
    GUILD_ID=your-discord-guild-id
    NOTIFICATION_CHANNEL_ID=channel-id-for-notifications
+   BOT_IMAGE_CHANNEL_ID=channel-id-for-image-storage
    ALLOWED_ROLES=RoleName1=RoleID1,RoleName2=RoleID2
    ```
 
    - `DISCORD_TOKEN`: The token for your Discord bot.
-   - `GUILD_ID`: The ID of your Discord server (guild).
+   - `GUILD_ID`: The ID of your Discord server.
    - `NOTIFICATION_CHANNEL_ID`: The ID of the channel where event notifications should be sent.
-   - `ALLOWED_ROLES`: A comma-separated list of roles allowed to create events, formatted as `RoleName=RoleID`. Example: `Admin=123456789012345678,EventOrganizer=987654321098765432`.
+   - `BOT_IMAGE_CHANNEL_ID`: The ID of a channel where uploaded event images will be stored.
+   - `ALLOWED_ROLES`: A comma-separated list of roles permitted to create events. Format: `RoleName=RoleID`.
 
 ### Running the Bot
 
 1. **Run the Bot**:
    ```bash
-   python Events_Notify.py
+   python Events.py
    ```
 
 2. **Bot Commands**:
-   - **Create Event**: Type `/events` in your Discord server to open the event creation modal (only available to users with the allowed roles).
+   - **Create Event**: Type `/events` in your Discord server to open the event creation modal (only available to users with allowed roles).
 
-### Notification Frequency
+### Event Management and Cleanup
 
-The bot checks for upcoming events and sends notifications based on the following schedule:
+- **Real-Time Event Updates**: The bot listens for updates such as event time changes, description edits, and cancellations, and logs them in real time.
+- **Automatic Cleanup**: Events are removed from the bot’s database when canceled or concluded to keep the storage efficient.
 
-- **24-Hour Reminder**: Sent approximately 24 hours before the event start time.
-- **12-Hour Reminder**: Sent approximately 12 hours before the event start time.
-
-To adjust the frequency of how often the bot checks for upcoming events, modify the `@tasks.loop` decorator in the script:
-
-```python
-@tasks.loop(minutes=60)  # Adjust this value to control check frequency
-```
 ### Customizing Notification Times
-To adjust the 24-hour and 12-hour notification windows, modify the conditions in the `notification_task` function inside the script. For example, to send notifications 48 hours and 6 hours before the event:
+You can adjust the notification times by changing the `NOTIFICATION_TIMINGS` variable in the script:
+
 ```python
-if time_until_event <= timedelta(hours=48) and time_until_event > timedelta(hours=47, minutes=59):
-    # 48 hours prior notification
-if time_until_event <= timedelta(hours=6) and time_until_event > timedelta(hours=5, minutes=59):
-    # 6 hours prior notification
+NOTIFICATION_TIMINGS = [24, 12]  # Time in hours before event start
 ```
 
 ### Local Time Zone Adjustment
 
-The bot assumes events are created in the `US/Eastern` time zone. If your organization is in a different time zone, adjust the `local_tz` variable in the script:
+The bot assumes events are created in the `US/Eastern` time zone. If your organization is in a different time zone, update the `local_tz` variable in the script:
 
 ```python
 local_tz = timezone('Your/TimeZone')
 ```
 
-Replace 'Your/TimeZone' with the appropriate time zone string. Here are some examples:
+Examples of time zones:
 
     North America:
         'America/New_York' – Eastern Time (ET)
@@ -105,15 +99,15 @@ Replace 'Your/TimeZone' with the appropriate time zone string. Here are some exa
 
 ### Notes
 
-- The bot needs to remain running continuously to manage event notifications. Consider deploying it on a server or a cloud service to ensure uptime.
-- If the bot misses a notification due to downtime, it will resume checking when restarted and will only send notifications for upcoming events within the next 12 or 24 hours.
+- The bot requires continuous uptime for real-time updates and automated cleanup. Consider deploying it on a server or cloud platform.
+- For any missed notifications due to downtime, the bot will automatically resume its tasks upon restarting, with up-to-date data for upcoming events.
 
 ## Troubleshooting
 
-- **Bot Not Responding**: Ensure the bot has the necessary permissions and that the token and IDs in the `.env` file are correct.
-- **Rate Limits**: If you encounter rate limits, consider increasing the check interval in the `@tasks.loop` decorator.
+- **Bot Not Responding**: Verify that the bot has the necessary permissions and that your `.env` file has the correct token and IDs.
+- **Missing Event Data**: Ensure that real-time updates and event logs confirm the storage and cleanup of data as intended. 
 
 ## License
 
-This bot script is licensed under the MIT License. Feel free to modify and use it in your organization.
+This bot is licensed under the MIT License. Feel free to modify and use it in your organization.
 

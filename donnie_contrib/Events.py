@@ -6,7 +6,7 @@ import os
 import aiohttp
 import base64
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from pytz import timezone
 
 # Load environment variables
@@ -27,10 +27,13 @@ ALLOWED_ROLES_DICT = {name: int(role_id) for name, role_id in (item.split('=') f
 
 # Define timezone
 local_tz = timezone('US/Eastern')
-event_data_store = {}  # Store event data, including image URL
+event_data_store = {}  # Store event data, including image URL and notification timers
 
 # Session initialized in on_ready for proper session handling
 aiohttp_session = None
+
+# Notification times (in hours before event start)
+NOTIFICATION_TIMES = [18, 6]
 
 class DiscordEvents:
     def __init__(self, session):
@@ -62,7 +65,6 @@ class DiscordEvents:
 
     async def update_event_cover_image(self, guild_id, event_id, image_url):
         try:
-            # Fetch and encode image as base64
             async with self.session.get(image_url) as response:
                 if response.status == 200:
                     image_data = await response.read()
@@ -71,7 +73,6 @@ class DiscordEvents:
                     print(f"Failed to fetch image from URL. HTTP Status: {response.status}")
                     return
 
-            # Send PATCH request to update cover image
             url = f"{self.base_api_url}/guilds/{guild_id}/scheduled-events/{event_id}"
             json_data = {"image": encoded_image}
             async with self.session.patch(url, headers=self.headers, json=json_data) as response:
@@ -98,7 +99,6 @@ class EventModal(discord.ui.Modal, title="Create a New Event"):
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         try:
-            # Parse and convert times
             local_start = local_tz.localize(datetime.strptime(self.start_time.value, "%Y-%m-%d %H:%M"))
             local_end = local_tz.localize(datetime.strptime(self.end_time.value, "%Y-%m-%d %H:%M"))
             if local_start < datetime.now(local_tz):
@@ -108,7 +108,6 @@ class EventModal(discord.ui.Modal, title="Create a New Event"):
                 await interaction.followup.send("❌ End time must be after start time.", ephemeral=True)
                 return
 
-            # Convert to UTC
             start_time_utc = local_start.astimezone(timezone('UTC')).isoformat()
             end_time_utc = local_end.astimezone(timezone('UTC')).isoformat()
 
@@ -122,11 +121,16 @@ class EventModal(discord.ui.Modal, title="Create a New Event"):
                 description=self.description.value or "No description provided."
             )
 
-            # Save event data
             if event_id:
-                event_data_store[interaction.id] = {"event_name": self.event_name.value, "event_id": event_id}
+                event_data_store[interaction.id] = {
+                    "event_name": self.event_name.value,
+                    "event_id": event_id,
+                    "start_time": local_start,
+                    "notification_tasks": []  # Store notification tasks for cancellation if needed
+                }
                 await interaction.followup.send(result, ephemeral=True)
                 await interaction.user.send("Event created! Click below to upload a cover image.", view=CoverImageUploadView(interaction.id))
+                await schedule_notifications(interaction.id, local_start)
             else:
                 await interaction.followup.send(result, ephemeral=True)
         except ValueError:
@@ -141,16 +145,34 @@ class CoverImageUploadView(discord.ui.View):
     async def upload_cover_image(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message("Please upload an image as a reply.", ephemeral=True)
 
+async def schedule_notifications(event_id, start_time):
+    """Schedules notifications at defined intervals before the event."""
+    for hours in NOTIFICATION_TIMES:
+        notify_time = start_time - timedelta(hours=hours)
+        if notify_time > datetime.now(local_tz):
+            task = asyncio.create_task(schedule_notification_task(event_id, notify_time, hours))
+            event_data_store[event_id]["notification_tasks"].append(task)
+
+async def schedule_notification_task(event_id, notify_time, hours):
+    """Waits until the specified time to send a notification."""
+    await asyncio.sleep((notify_time - datetime.now(local_tz)).total_seconds())
+    await send_notification(event_id, hours)
+
+async def send_notification(event_id, hours):
+    """Sends a reminder for the event if it's still scheduled."""
+    event_data = event_data_store.get(event_id)
+    if event_data:
+        channel = bot.get_channel(NOTIFICATION_CHANNEL_ID)
+        await channel.send(f"Reminder: '{event_data['event_name']}' starts in {hours} hours!")
+
 @bot.event
 async def on_message(message):
     if message.author.bot:
         return
     if isinstance(message.channel, discord.DMChannel) and message.attachments:
-        # Get interaction ID from last command
         last_interaction_id = list(event_data_store.keys())[-1]
         event_id = event_data_store[last_interaction_id]["event_id"]
 
-        # Post image to bot_image_channel
         bot_image_channel = bot.get_channel(BOT_IMAGE_CHANNEL_ID)
         if bot_image_channel:
             image_message = await bot_image_channel.send(file=await message.attachments[0].to_file())
@@ -163,7 +185,7 @@ async def on_message(message):
 @bot.event
 async def on_ready():
     global aiohttp_session
-    aiohttp_session = aiohttp.ClientSession()  # Start aiohttp session
+    aiohttp_session = aiohttp.ClientSession()
     print(f'Bot connected as {bot.user}')
     try:
         await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
@@ -173,36 +195,28 @@ async def on_ready():
 
 @bot.event
 async def on_scheduled_event_update(before, after):
-    """Logs specific attribute changes and cleans up event data after cancellation or completion."""
     print(f"Scheduled event updated: {before.name} -> {after.name}")
 
-    # Check and log start time changes
     if before.start_time != after.start_time:
         print(f"Event start time changed from {before.start_time} to {after.start_time}")
+        for task in event_data_store.get(after.id, {}).get("notification_tasks", []):
+            task.cancel()
+        event_data_store[after.id]["notification_tasks"] = []
+        await schedule_notifications(after.id, after.start_time.astimezone(local_tz))
 
-    # Check and log end time changes
     if before.end_time != after.end_time:
         print(f"Event end time changed from {before.end_time} to {after.end_time}")
     
-    # Check and log description changes
-    if before.description != after.description:
-        print(f"Event description changed:\nBefore: {before.description}\nAfter: {after.description}")
-
-    # Check and log cancellation status
     if before.status != after.status:
         if after.status == discord.ScheduledEventStatus.canceled:
             print(f"Event '{after.name}' has been canceled.")
             if event_data_store.pop(after.id, None):
                 print(f"Event '{after.name}' removed from data store (Reason: Canceled)")
-        else:
-            print(f"Event status changed from {before.status} to {after.status}")
 
-    # Check if event has concluded and remove from store
     if after.end_time and after.end_time < datetime.now().astimezone(timezone('UTC')):
         if event_data_store.pop(after.id, None):
             print(f"Event '{after.name}' has concluded and been removed from data store.")
 
-# Slash command for creating an event
 @bot.tree.command(name="events", description="Create a new scheduled event")
 @app_commands.guilds(discord.Object(id=GUILD_ID))
 async def create_event(interaction: discord.Interaction):
@@ -211,7 +225,6 @@ async def create_event(interaction: discord.Interaction):
     else:
         await interaction.response.send_message("❌ You don't have permission to create events.", ephemeral=True)
 
-# Clean shutdown to close aiohttp session
 async def on_shutdown():
     await aiohttp_session.close()
     print("Session closed")
